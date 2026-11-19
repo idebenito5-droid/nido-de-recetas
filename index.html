@@ -373,6 +373,15 @@ h1,h2,h3{margin:0;letter-spacing:-.015em;font-weight:800}
 .mcres li.mccount{padding:6px 2px;font-size:12px;color:var(--muted);font-weight:700}
 .ftot{position:fixed;z-index:15;right:max(16px,calc(50% - 224px));bottom:calc(80px + env(safe-area-inset-bottom));background:var(--orange);color:var(--blue-deep);border:2px solid #fff;border-radius:18px;padding:10px 16px;text-align:right;box-shadow:0 10px 24px rgba(10,51,55,.28)}
 .ftot b{display:block;font-size:21px;letter-spacing:-.02em;line-height:1.1}.ftot small{display:block;font-size:11px;opacity:.8;font-weight:700}
+/* Escala general más compacta */
+html{zoom:.88}
+#app,.nav,.cook-in,.drawer .box{max-width:545px}
+@media (min-width:700px){
+  #app,.nav{max-width:900px}
+  .grid{grid-template-columns:repeat(3,1fr)}
+  .ftot{right:max(16px,calc(50% - 432px))}
+}
+@media (min-width:1050px){ .grid{grid-template-columns:repeat(4,1fr)} }
 </style>
 </head>
 <body>
