@@ -389,6 +389,10 @@ html{zoom:.88}
 .rtot li{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:4px 0;font-weight:600}
 .rtot li b{color:var(--blue);white-space:nowrap}.rtot li.sum{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-weight:800}
 .rtot li.sum b{font-size:16px}
+.rgrp{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:0 10px 2px}
+.rgh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 2px 8px;border-bottom:2px solid var(--green-2)}
+.rgh b{font-size:14.5px;color:var(--blue)}.rgh span{font-size:13px;font-weight:800;color:var(--green);white-space:nowrap}
+.rtot li.note{font-size:11.5px;color:var(--muted);font-weight:600;padding-top:6px}
 </style>
 </head>
 <body>
@@ -715,7 +719,7 @@ const STOPW=new Set('de del la las el los en y para con a al o u un una unos una
 const DESCR=/\b(fresc[oa]s?|picad[oa]s?|cortad[oa]s?|troce?ad[oa]s?|trozos?|rodajas?|dados?|molid[oa]s?|rallad[oa]s?|pelad[oa]s?|mediana?s?|grandes?|peque[nñ][oa]s?|maduros?|maduras?|blandas?|blandos?|cubitos?|cocid[oa]s?|congelad[oa]s?|descongelad[oa]s?|escurrid[oa]s?|lavad[oa]s?|limpi[oa]s?|bote|opcional|gusto|recién|recien|hojas? de|ramitas? de|ramitas?|dientes? de|cucharad(it)?as? de|pizca de|chorrito de|vaso de|taza de|lata de|sobre de|aprox\.?|unos?|unas?|\d+[.,]?\d*\s*(g|kg|ml|l|cl)?)\b/g;
 function ingKey(n){ let t=norm(n).replace(/\(.*?\)/g,' ').replace(/[,;:].*$/,'').replace(DESCR,' ');
   return t.split(/\s+/).filter(w=>w&&!STOPW.has(w)&&w.length>1).join(' '); }
-const PROC=/\b(spray|monodosis|granulad[oa]|deshidratad[oa]s?|polvo|salsa|sopa|crema|zumo|chips|snack|aperitivo|galletas?|caramelos?|helado|bebida|refresco|aliñ[oa]|sazonador|caldo|pate|untable|tortitas?)\b/;
+const PROC=/\b(ultracongelad[oa]s?|negro|perejil|spray|monodosis|granulad[oa]|deshidratad[oa]s?|polvo|salsa|sopa|crema|zumo|chips|snack|aperitivo|galletas?|caramelos?|helado|bebida|refresco|ali[nñ][oa]|ali[nñ]ad[oa]s?|sazonador|caldo|pate|untable|tortitas?)\b/;
 function stem(w){ return w.replace(/(es|s)$/,''); }
 function mcTok(){ if(MC._tok) return; MC._tok=MC.nidx.map(n=>n.split(/[^a-z0-9ñ]+/).filter(Boolean)); const df={};
   MC._tok.forEach(ts=>new Set(ts.map(stem)).forEach(t=>df[t]=(df[t]||0)+1)); MC._df=df; }
@@ -750,19 +754,25 @@ function matchFor(e){ const o=MATCH[e.key]; if(o==='none') return null;
 function recSectionHTML(){
   if(!shop.some(g=>g.items.some(i=>!i.done))) return '';
   if(!MC||!MC.products) return `<div class="lbox"><h3>Tus recetas en Mercadona</h3><div class="mcnote">Cuando el catálogo de Mercadona esté cargado, aquí verás automáticamente los productos y precios de los ingredientes de tus recetas.</div></div>`;
-  const needs=recipeNeeds(); let tot=0, miss=0;
-  const rows=needs.map((e,k)=>{ const i=matchFor(e);
-    if(i==null){ miss++; return `<li><span class="pimg none">${ic('cart','sm')}</span><div class="pinf"><b>${esc(e.label)}</b><span>${MATCH[e.key]==='none'?'No lo compras en Mercadona':'Sin coincidencia en Mercadona'}</span></div><button class="chg" onclick="openMatch(${k})">${MATCH[e.key]==='none'?'Elegir':'Buscar'}</button></li>`; }
-    const p=MC.products[i]; const n=Math.max(...e.items.map(it=>packsNeeded(it,p))); tot+=p[3]*n;
-    return `<li>${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b><span>Para: ${esc(e.label)}${e.recipes.size>1?` · ${e.recipes.size} recetas`:''}</span><span>${esc(mcSize(p))}${n>1?` · ${n} unidades`:''}</span></div>
-      <div class="ppr">${eur(p[3]*n)}${n>1?`<small>${eur(p[3])}/ud.</small>`:''}</div><button class="chg" onclick="openMatch(${k})">Cambiar</button></li>`; }).join('');
+  const needs=recipeNeeds(); const kOf=new Map(needs.map((e,k)=>[e.key,k]));
+  // total sin duplicar: cada producto se compra una vez (con las unidades que más pida alguna receta)
+  let tot=0, miss=0; needs.forEach(e=>{ const i=matchFor(e); if(i==null){ miss++; return; } const p=MC.products[i]; tot+=p[3]*Math.max(...e.items.map(it=>packsNeeded(it,p))); });
+  const groups=shop.filter(g=>g.items.some(i=>!i.done)); let anyShared=false;
+  const blocks=groups.map(g=>{ let sub=0; const seen=new Set();
+    const rows=g.items.filter(it=>!it.done).map(it=>{ const key=ingKey(it.n); if(!key||seen.has(key)) return ''; seen.add(key);
+      const k=kOf.get(key), e=needs[k], i=matchFor(e); const shared=e.recipes.size>1; if(shared) anyShared=true;
+      if(i==null) return `<li><span class="pimg none">${ic('cart','sm')}</span><div class="pinf"><b>${esc(it.n)}</b><span>${MATCH[key]==='none'?'No lo compras en Mercadona':'Sin coincidencia en Mercadona'}</span></div><button class="chg" onclick="openMatch(${k})">${MATCH[key]==='none'?'Elegir':'Buscar'}</button></li>`;
+      const p=MC.products[i]; const n=packsNeeded(it,p); sub+=p[3]*n;
+      return `<li>${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b><span>Para: ${esc(it.n)}${shared?' · también en otra receta':''}</span><span>${esc(mcSize(p))}${n>1?` · ${n} unidades`:''}</span></div>
+        <div class="ppr">${eur(p[3]*n)}${n>1?`<small>${eur(p[3])}/ud.</small>`:''}</div><button class="chg" onclick="openMatch(${k})">Cambiar</button></li>`; }).join('');
+    return {title:g.title,serves:g.serves,sub,html:`<div class="rgrp"><div class="rgh"><b>${esc(g.title)}</b><span>${g.serves?g.serves+' raciones · ':''}${eur(sub)}</span></div><ul class="mcres" style="max-height:none">${rows}</ul></div>`}; });
   window.__needs=needs; window.__recTot=tot;
-  const perRec=shop.filter(g=>g.items.some(i=>!i.done)).map(g=>{ let t=0,m=0; g.items.filter(i=>!i.done).forEach(it=>{ const e=needs.find(x=>x.key===ingKey(it.n)); if(!e) return; const i=matchFor(e); if(i==null){m++;return;} const p=MC.products[i]; t+=p[3]*packsNeeded(it,p); }); return [g.title,t,m]; });
-  const recTotals=`<ul class="rtot">${perRec.map(([t,v,m])=>`<li><span>${esc(t)}</span><b>${eur(v)}</b></li>`).join('')}<li class="sum"><span>Total para tus recetas</span><b>${eur(tot)}</b></li></ul>`;
-  return `<div class="lbox"><div class="mchead" style="margin-bottom:4px"><img src="img/mercadona-logo.png" alt="" width="36" height="40" style="height:40px"><div><h3>Tus recetas en Mercadona</h3><span>${needs.length} ingredientes${miss?` · ${miss} sin producto`:''}</span></div></div>
+  const sumAll=blocks.reduce((a,b)=>a+b.sub,0);
+  const recTotals=`<ul class="rtot">${blocks.map(b=>`<li><span>${esc(b.title)}</span><b>${eur(b.sub)}</b></li>`).join('')}<li class="sum"><span>Total para tus recetas</span><b>${eur(tot)}</b></li>${groups.length>1&&Math.abs(sumAll-tot)>0.005?`<li class="note">Los productos que se repiten entre recetas se cuentan una sola vez en el total.</li>`:''}</ul>`;
+  return `<div class="lbox"><div class="mchead" style="margin-bottom:4px"><img src="img/mercadona-logo.png" alt="" width="36" height="40" style="height:40px"><div><h3>Tus recetas en Mercadona</h3><span>${groups.length} receta${groups.length>1?'s':''} · ${needs.length} ingredientes${miss?` · ${miss} sin producto`:''}</span></div></div>
     ${recTotals}
-    <ul class="mcres" style="max-height:none">${rows}</ul>
-    <div class="mcnote">Se elige el producto más parecido de Mercadona. Toca «Cambiar» si prefieres otro. La sal, el aceite o las especias que ya tengas en casa, márcalos como comprados en RECETAS.</div></div>`;
+    ${blocks.map(b=>b.html).join('')}
+    <div class="mcnote">Se elige el producto más parecido de Mercadona. Toca «Cambiar» si prefieres otro; el cambio se aplica en todas las recetas que lo usan. Lo que ya tengas en casa, márcalo como comprado en RECETAS.</div></div>`;
 }
 function openMatch(k){ const e=window.__needs[k]; const c=mcCandidates(e.key,12);
   const d=document.createElement('div'); d.className='drawer'; d.onclick=ev=>{ if(ev.target===d) d.remove(); };
