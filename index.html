@@ -383,6 +383,12 @@ html{zoom:.88}
   .ftot{right:max(16px,calc(50% - 432px))}
 }
 @media (min-width:1050px){ .grid{grid-template-columns:repeat(4,1fr)} }
+.tabmc{display:inline-flex;align-items:center;gap:6px}.tabmc img{height:20px;width:auto;background:#fff;border-radius:50%}
+.mcres li.pick{cursor:pointer}.mcres li.pick:active{background:var(--green-soft)}
+.rtot{list-style:none;margin:6px 0 8px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.rtot li{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:4px 0;font-weight:600}
+.rtot li b{color:var(--blue);white-space:nowrap}.rtot li.sum{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-weight:800}
+.rtot li.sum b{font-size:16px}
 </style>
 </head>
 <body>
@@ -672,9 +678,7 @@ function mcSearch(q){
   if(ws.length) res.sort((a,b)=>{ const sa=norm(MC.products[a][10]).includes(ws[0])?0:MC.idx[a].startsWith(ws[0])?1:2, sb=norm(MC.products[b][10]).includes(ws[0])?0:MC.idx[b].startsWith(ws[0])?1:2; return sa-sb; });
   const max=120;
   box.innerHTML=res.length?`<li class="mccount"><span>${res.length.toLocaleString('es-ES')} producto${res.length>1?'s':''}${res.length>max?` · se muestran los ${max} primeros`:''}</span></li>`+res.slice(0,max).map(i=>{ const p=MC.products[i];
-    return `<li>${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b><span>${esc(mcSize(p))}</span></div>
-      <div class="ppr">${eur(p[3])}${p[6]?`<small>${eur(p[6])}/${esc(p[7])}</small>`:''}</div>
-      <button class="padd" onclick="addMC(${i})" aria-label="Añadir">+</button></li>`; }).join('')
+    return `<li class="pick" onclick="addMC(${i})">${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b></div><span class="padd" aria-label="Añadir">+</span></li>`; }).join('')
     :`<li><div class="pinf"><span>No hay productos${q?` con «${esc(q)}»`:''} en este filtro.</span></div></li>`;
 }
 function saveList(){ store.set('cc_list',flist); }
@@ -691,7 +695,7 @@ function flCopy(){ const t=flist.filter(i=>!i.done).map(i=>`- ${i.n}${(i.qty||1)
   navigator.clipboard.writeText(t||'Lista vacía').then(()=>toast('Lista copiada')).catch(()=>toast('No se ha podido copiar')); }
 function flistHTML(){
   const left=flist.filter(i=>!i.done), tot=left.reduce((a,i)=>a+(i.price?i.price*(i.qty||1):0),0)+(window.__recTot||0), np=left.filter(i=>!i.price).length;
-  return `<div class="lsum"><div><small>Lista normal</small><b>${left.length}</b><small>productos pendientes</small></div>
+  return `<div class="lsum"><div><small>Mi lista de Mercadona</small><b>${left.length}</b><small>productos por comprar</small></div>
     <div style="text-align:right"><small>${flist.filter(i=>i.done).length} comprados</small></div></div>
   <div class="ftot" aria-live="polite"><small>Total estimado</small><b>${eur(tot)}</b>${np?`<small>${np} sin precio</small>`:''}</div>
   ${flist.length?`<ul class="flist">${flist.map((i,k)=>`<li class="${i.done?'done':''}">
@@ -701,7 +705,7 @@ function flistHTML(){
       <div class="qty"><button onclick="flQty(${k},-1)">−</button>${i.qty||1}<button onclick="flQty(${k},1)">+</button></div>
       <button class="fdel" onclick="flDel(${k})" aria-label="Quitar">${ic('close','sm')}</button></li>`).join('')}</ul>
     <div class="shopacts"><button class="btn sec small" onclick="flCopy()">${ic('copy','sm')}Copiar lista</button>${flist.some(i=>i.done)?`<button class="btn sec small" onclick="flClearDone()">Quitar comprados</button>`:''}</div>`
-  :`<div class="empty" style="padding-top:24px">Tu lista normal está vacía.<br>Busca productos de Mercadona o escribe lo que necesites.</div>`}`;
+  :`<div class="empty" style="padding-top:24px">Busca productos arriba y tócalos para añadirlos a tu lista con su precio.</div>`}`;
 }
 function refreshList(){ const el=$('#flwrap'); if(el) el.innerHTML=flistHTML(); const nv=document.querySelector('.nav'); if(nv) nv.outerHTML=navBar(); }
 
@@ -738,7 +742,7 @@ function matchFor(e){ const o=MATCH[e.key]; if(o==='none') return null;
   const c=mcCandidates(e.key,1); return c.length?c[0]:null; }
 function recSectionHTML(){
   if(!shop.some(g=>g.items.some(i=>!i.done))) return '';
-  if(!MC||!MC.products) return `<div class="lbox"><h3>Para tus recetas</h3><div class="mcnote">Cuando el catálogo de Mercadona esté cargado, aquí verás automáticamente los productos y precios de los ingredientes de tus recetas.</div></div>`;
+  if(!MC||!MC.products) return `<div class="lbox"><h3>Tus recetas en Mercadona</h3><div class="mcnote">Cuando el catálogo de Mercadona esté cargado, aquí verás automáticamente los productos y precios de los ingredientes de tus recetas.</div></div>`;
   const needs=recipeNeeds(); let tot=0, miss=0;
   const rows=needs.map((e,k)=>{ const i=matchFor(e);
     if(i==null){ miss++; return `<li><span class="pimg none">${ic('cart','sm')}</span><div class="pinf"><b>${esc(e.label)}</b><span>${MATCH[e.key]==='none'?'No lo compras en Mercadona':'Sin coincidencia en Mercadona'}</span></div><button class="chg" onclick="openMatch(${k})">${MATCH[e.key]==='none'?'Elegir':'Buscar'}</button></li>`; }
@@ -746,9 +750,12 @@ function recSectionHTML(){
     return `<li>${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b><span>Para: ${esc(e.label)}${e.recipes.size>1?` · ${e.recipes.size} recetas`:''}</span><span>${esc(mcSize(p))}${n>1?` · ${n} unidades`:''}</span></div>
       <div class="ppr">${eur(p[3]*n)}${n>1?`<small>${eur(p[3])}/ud.</small>`:''}</div><button class="chg" onclick="openMatch(${k})">Cambiar</button></li>`; }).join('');
   window.__needs=needs; window.__recTot=tot;
-  return `<div class="lbox"><div class="mchead" style="margin-bottom:4px"><img src="img/mercadona-logo.png" alt="" width="36" height="40" style="height:40px"><div><h3>Para tus recetas</h3><span>${needs.length} ingredientes · ${eur(tot)}${miss?` · ${miss} sin producto`:''}</span></div></div>
+  const perRec=shop.filter(g=>g.items.some(i=>!i.done)).map(g=>{ let t=0,m=0; g.items.filter(i=>!i.done).forEach(it=>{ const e=needs.find(x=>x.key===ingKey(it.n)); if(!e) return; const i=matchFor(e); if(i==null){m++;return;} const p=MC.products[i]; t+=p[3]*packsNeeded(it,p); }); return [g.title,t,m]; });
+  const recTotals=`<ul class="rtot">${perRec.map(([t,v,m])=>`<li><span>${esc(t)}</span><b>${eur(v)}</b></li>`).join('')}<li class="sum"><span>Total para tus recetas</span><b>${eur(tot)}</b></li></ul>`;
+  return `<div class="lbox"><div class="mchead" style="margin-bottom:4px"><img src="img/mercadona-logo.png" alt="" width="36" height="40" style="height:40px"><div><h3>Tus recetas en Mercadona</h3><span>${needs.length} ingredientes${miss?` · ${miss} sin producto`:''}</span></div></div>
+    ${recTotals}
     <ul class="mcres" style="max-height:none">${rows}</ul>
-    <div class="mcnote">Se elige el producto más parecido de Mercadona. Toca «Cambiar» si prefieres otro. La sal, el aceite o las especias que ya tengas en casa, márcalos como comprados en «De recetas».</div></div>`;
+    <div class="mcnote">Se elige el producto más parecido de Mercadona. Toca «Cambiar» si prefieres otro. La sal, el aceite o las especias que ya tengas en casa, márcalos como comprados en RECETAS.</div></div>`;
 }
 function openMatch(k){ const e=window.__needs[k]; const c=mcCandidates(e.key,12);
   const d=document.createElement('div'); d.className='drawer'; d.onclick=ev=>{ if(ev.target===d) d.remove(); };
@@ -768,21 +775,19 @@ function setMatch(k,v){ const e=window.__needs[k]; if(v==null) delete MATCH[e.ke
 function viewShopFree(){
   loadMC(); window.__recTot=0;
   const st=!MC||MC.loading?`<div class="mcnote">Cargando el catálogo…</div>`
-    :MC.missing?`<div class="mcnote">El catálogo de Mercadona todavía no está cargado en la app. Mientras tanto puedes apuntar productos a mano.</div>`
+    :MC.missing?`<div class="mcnote">El catálogo de Mercadona todavía no está cargado en la app. En cuanto se carguen los precios podrás buscar aquí cualquier producto.</div>`
     :`<div class="mcnote">${MC.products.length.toLocaleString('es-ES')} productos · precios de Mercadona del ${esc(MC.date)}${MC.wh?` (${esc(MC.wh)})`:''}</div>`;
   return `<div class="lbox"><div class="mchead"><img src="img/mercadona-logo.png" alt="Mercadona" width="42" height="46"><div><h3>Buscar en Mercadona</h3><span>Todos los productos, con su precio</span></div></div>
       <div class="lrow"><input id="mcq" type="search" placeholder="Pasta, leche, tomate triturado…" oninput="mcSearch(this.value)" ${!MC||MC.missing||MC.loading?'disabled':''}></div>
       ${MC&&MC.products?`<div class="fl mcfl"><label class="pill ${S.mcCat?'on':''}"><select onchange="mcFilter(this,0)"><option value="">Tipo de producto</option>${mcCats().map(([c])=>`<option ${S.mcCat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></label>${mcSubSel()}</div>`:''}
       ${st}<ul class="mcres" id="mcres"></ul></div>
-    <div class="lbox"><h3>Añadir a mano</h3>
-      <div class="lrow"><input id="freein" placeholder="Escribe un producto" onkeydown="if(event.key==='Enter')addFree()"><button onclick="addFree()">Añadir</button></div></div>
-    ${recSectionHTML()}
-    <div id="flwrap">${flistHTML()}</div><div style="height:90px"></div>`;
+    <div id="flwrap">${flistHTML()}</div>
+    ${recSectionHTML()}<div style="height:90px"></div>`;
 }
 function viewShop(){
   S.stab=S.stab||'rec';
-  return `<header class="top"><h1 class="pageh">Lista de la compra</h1><div class="sub">${S.stab==='rec'?'Lo que necesitas para tus recetas':'Tu compra de siempre, con precios de Mercadona'}</div></header>
-  <div class="tabs stabs"><button class="${S.stab==='rec'?'on':''}" onclick="S.stab='rec';render()">De recetas</button><button class="${S.stab==='free'?'on':''}" onclick="S.stab='free';render()">Lista normal</button></div>
+  return `<header class="top"><h1 class="pageh">Lista de la compra</h1><div class="sub">${S.stab==='rec'?'Lo que necesitas para tus recetas':'Tus productos de Mercadona, con foto y precio'}</div></header>
+  <div class="tabs stabs"><button class="${S.stab==='rec'?'on':''}" onclick="S.stab='rec';render()">RECETAS</button><button class="${S.stab==='free'?'on':''}" onclick="S.stab='free';render()"><span class="tabmc"><img src="img/mercadona-logo.png" alt="">Mercadona</span></button></div>
   ${S.stab==='rec'?viewShopRec():viewShopFree()}`;
 }
 
