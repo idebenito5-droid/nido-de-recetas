@@ -675,14 +675,14 @@ function mcSearch(q){
   for(let i=0;i<MC.idx.length;i++){ const p=MC.products[i];
     if(cat&&p[9]!==cat) continue; if(sub&&p[10]!==sub) continue;
     const t=MC.idx[i]; if(ws.every(w=>t.includes(w))) res.push(i); }
-  if(ws.length) res.sort((a,b)=>{ const sa=norm(MC.products[a][10]).includes(ws[0])?0:MC.idx[a].startsWith(ws[0])?1:2, sb=norm(MC.products[b][10]).includes(ws[0])?0:MC.idx[b].startsWith(ws[0])?1:2; return sa-sb; });
+  if(ws.length){ const rk=i=>{ const sb=norm(MC.products[i][10]), nm=MC.idx[i]; return sb.startsWith(ws[0])?0:nm.startsWith(ws[0])?1:sb.includes(ws[0])?3:2; }; res.sort((a,b)=>rk(a)-rk(b)); }
   const max=120;
   box.innerHTML=res.length?`<li class="mccount"><span>${res.length.toLocaleString('es-ES')} producto${res.length>1?'s':''}${res.length>max?` · se muestran los ${max} primeros`:''}</span></li>`+res.slice(0,max).map(i=>{ const p=MC.products[i];
     return `<li class="pick" onclick="addMC(${i})">${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b></div><span class="padd" aria-label="Añadir">+</span></li>`; }).join('')
     :`<li><div class="pinf"><span>No hay productos${q?` con «${esc(q)}»`:''} en este filtro.</span></div></li>`;
 }
 function saveList(){ store.set('cc_list',flist); }
-function addMC(i){ const p=MC.products[i]; const ex=flist.find(x=>x.pid===p[0]&&!x.done);
+function addMC(i){ const p=MC.products[i]; const ex=flist.find(x=>String(x.pid)===String(p[0])&&!x.done);
   if(ex) ex.qty=(ex.qty||1)+1; else flist.unshift({n:p[1],pid:p[0],price:p[3],sz:mcSize(p),sheet:p[13],pos:p[14],qty:1,done:false});
   saveList(); toast('Añadido: '+p[1]); refreshList(); }
 function addFree(){ const el=$('#freein'); const v=(el.value||'').trim(); if(!v) return;
@@ -715,15 +715,22 @@ const STOPW=new Set('de del la las el los en y para con a al o u un una unos una
 const DESCR=/\b(fresc[oa]s?|picad[oa]s?|cortad[oa]s?|troce?ad[oa]s?|trozos?|rodajas?|dados?|molid[oa]s?|rallad[oa]s?|pelad[oa]s?|mediana?s?|grandes?|peque[nñ][oa]s?|maduros?|maduras?|blandas?|blandos?|cubitos?|cocid[oa]s?|congelad[oa]s?|descongelad[oa]s?|escurrid[oa]s?|lavad[oa]s?|limpi[oa]s?|bote|opcional|gusto|recién|recien|hojas? de|ramitas? de|ramitas?|dientes? de|cucharad(it)?as? de|pizca de|chorrito de|vaso de|taza de|lata de|sobre de|aprox\.?|unos?|unas?|\d+[.,]?\d*\s*(g|kg|ml|l|cl)?)\b/g;
 function ingKey(n){ let t=norm(n).replace(/\(.*?\)/g,' ').replace(/[,;:].*$/,'').replace(DESCR,' ');
   return t.split(/\s+/).filter(w=>w&&!STOPW.has(w)&&w.length>1).join(' '); }
-const PROC=/\b(polvo|salsa|sopa|crema|zumo|chips|snack|aperitivo|galletas?|caramelos?|helado|bebida|refresco|aliñ[oa]|sazonador|caldo|pate|untable|tortitas?)\b/;
+const PROC=/\b(spray|monodosis|granulad[oa]|deshidratad[oa]s?|polvo|salsa|sopa|crema|zumo|chips|snack|aperitivo|galletas?|caramelos?|helado|bebida|refresco|aliñ[oa]|sazonador|caldo|pate|untable|tortitas?)\b/;
 function stem(w){ return w.replace(/(es|s)$/,''); }
-function mcCandidates(key,lim){ if(!MC||!MC.products||!key) return [];
-  const ws=key.split(' ').map(stem).filter(Boolean); if(!ws.length) return [];
-  const sc=[];
-  for(let i=0;i<MC.idx.length;i++){ const nm=MC.nidx[i]; let hit=0,first=0;
-    for(let j=0;j<ws.length;j++){ if(nm.includes(ws[j])){ hit++; if(j===0) first=1; } }
-    if(!first) continue;
-    const s=hit/ws.length*10 + (nm.startsWith(ws[0])?3:0) + (MC.products[i][1].includes('Hacendado')?0.2:0) - nm.split(' ').length*0.15 - (PROC.test(nm)&&!PROC.test(key)?3:0);
+function mcTok(){ if(MC._tok) return; MC._tok=MC.nidx.map(n=>n.split(/[^a-z0-9ñ]+/).filter(Boolean)); const df={};
+  MC._tok.forEach(ts=>new Set(ts.map(stem)).forEach(t=>df[t]=(df[t]||0)+1)); MC._df=df; }
+const tokHit=(ts,w)=>ts.some(t=>t===w||(t.startsWith(w)&&t.length-w.length<=2));
+function mcCandidates(key,lim,strict){ if(!MC||!MC.products||!key) return []; mcTok();
+  const ws=[...new Set(key.split(' ').map(stem).filter(w=>w.length>1))]; if(!ws.length) return [];
+  if(strict&&ws.some(w=>w.length>3&&!MC._df[w])) return [];
+  const N=MC.products.length, idf=w=>Math.log(N/(1+(MC._df[w]||0)));
+  // palabra obligatoria: la más específica que exista en el catálogo; si no, la primera
+  const known=ws.filter(w=>MC._df[w]); const must=known.length?known.reduce((a,b)=>idf(b)>idf(a)?b:a):ws[0];
+  const tot=ws.reduce((a,w)=>a+idf(w),0)||1; const sc=[];
+  for(let i=0;i<N;i++){ const ts=MC._tok[i]; if(!tokHit(ts,must)) continue;
+    let m=0; ws.forEach(w=>{ if(tokHit(ts,w)) m+=idf(w); });
+    const nm=MC.nidx[i];
+    const s=m/tot*10 + (tokHit([ts[0]],ws[0])?3:0) + (MC.products[i][1].includes('Hacendado')?0.2:0) - ts.length*0.15 - (PROC.test(nm)&&!PROC.test(key)?3:0) - (/spray|monodosis/i.test(MC.products[i][2])?3:0);
     sc.push([s,i]); }
   sc.sort((a,b)=>b[0]-a[0]||MC.products[a[1]][3]-MC.products[b[1]][3]);
   return sc.slice(0,lim||8).map(x=>x[1]); }
@@ -736,10 +743,10 @@ function recipeNeeds(){ const m=new Map();
   shop.forEach(g=>g.items.forEach(it=>{ if(it.done) return; const k=ingKey(it.n); if(!k) return;
     const e=m.get(k)||{key:k,label:it.n,items:[],recipes:new Set()}; e.items.push(it); e.recipes.add(g.title); m.set(k,e); }));
   return [...m.values()]; }
-function pidIndex(pid){ if(!MC._pid){ MC._pid=new Map(); MC.products.forEach((p,i)=>MC._pid.set(p[0],i)); } return MC._pid.get(pid); }
+function pidIndex(pid){ if(!MC._pid){ MC._pid=new Map(); MC.products.forEach((p,i)=>MC._pid.set(String(p[0]),i)); } return MC._pid.get(String(pid)); }
 function matchFor(e){ const o=MATCH[e.key]; if(o==='none') return null;
   if(o!=null){ const i=pidIndex(o); if(i!=null) return i; }
-  const c=mcCandidates(e.key,1); return c.length?c[0]:null; }
+  const c=mcCandidates(e.key,1,true); return c.length?c[0]:null; }
 function recSectionHTML(){
   if(!shop.some(g=>g.items.some(i=>!i.done))) return '';
   if(!MC||!MC.products) return `<div class="lbox"><h3>Tus recetas en Mercadona</h3><div class="mcnote">Cuando el catálogo de Mercadona esté cargado, aquí verás automáticamente los productos y precios de los ingredientes de tus recetas.</div></div>`;
@@ -765,7 +772,7 @@ function openMatch(k){ const e=window.__needs[k]; const c=mcCandidates(e.key,12)
     <div class="shopacts" style="margin:12px 0 0"><button class="btn sec small" onclick="setMatch(${k},'none')">No lo compro en Mercadona</button><button class="btn sec small" onclick="setMatch(${k},null)">Automático</button></div></div>`;
   document.body.appendChild(d);
   const draw=q=>{ const ids=q?mcCandidates(ingKey(q)||norm(q),30):c; $('#mlist').innerHTML=ids.length?ids.map(i=>{ const p=MC.products[i];
-      return `<li onclick="setMatch(${k},${p[0]})" style="cursor:pointer">${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b><span>${esc(mcSize(p))}</span></div><div class="ppr">${eur(p[3])}${p[6]?`<small>${eur(p[6])}/${esc(p[7])}</small>`:''}</div></li>`; }).join('')
+      return `<li onclick="setMatch(${k},'${p[0]}')" style="cursor:pointer">${pimg(p[13],p[14])}<div class="pinf"><b>${esc(p[1])}</b><span>${esc(mcSize(p))}</span></div><div class="ppr">${eur(p[3])}${p[6]?`<small>${eur(p[6])}/${esc(p[7])}</small>`:''}</div></li>`; }).join('')
       :`<li><div class="pinf"><span>Sin resultados.</span></div></li>`; };
   draw(''); $('#mq').oninput=ev=>draw(ev.target.value.trim());
 }
@@ -781,8 +788,7 @@ function viewShopFree(){
       <div class="lrow"><input id="mcq" type="search" placeholder="Pasta, leche, tomate triturado…" oninput="mcSearch(this.value)" ${!MC||MC.missing||MC.loading?'disabled':''}></div>
       ${MC&&MC.products?`<div class="fl mcfl"><label class="pill ${S.mcCat?'on':''}"><select onchange="mcFilter(this,0)"><option value="">Tipo de producto</option>${mcCats().map(([c])=>`<option ${S.mcCat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></label>${mcSubSel()}</div>`:''}
       ${st}<ul class="mcres" id="mcres"></ul></div>
-    <div id="flwrap">${flistHTML()}</div>
-    ${recSectionHTML()}<div style="height:90px"></div>`;
+    ${(()=>{ const rs=recSectionHTML(); return `<div id="flwrap">${flistHTML()}</div>${rs}`; })()}<div style="height:90px"></div>`;
 }
 function viewShop(){
   S.stab=S.stab||'rec';
