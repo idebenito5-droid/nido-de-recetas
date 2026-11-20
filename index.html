@@ -410,6 +410,7 @@ html{zoom:.88}
 .pad{display:grid;grid-template-columns:repeat(3,72px);gap:14px}
 .pad button{height:72px;border-radius:50%;background:var(--paper);border:1.5px solid var(--line);font-size:24px;font-weight:700;color:var(--ink)}
 .pad button:active{background:var(--green-soft)}.lerr{min-height:20px;color:#B4472A;font-weight:700;font-size:14px}
+.ingrow.sec{grid-template-columns:1fr auto}.ingrow.sec input{font-weight:800;color:var(--blue)}
 </style>
 </head>
 <body>
@@ -508,7 +509,7 @@ const S={mtab:'hist',hsort:'date',view:'home',cat:'Todas',q:'',tr:'all',id:null,
 const T={left:0,total:0,running:false,int:null};
 let audioCtx=null, wakeLock=null;
 
-const all=()=>[...mine,...BASE];
+const all=()=>{ const ov=new Map(mine.filter(m=>m.over).map(m=>[m.id,m])); return [...mine.filter(m=>!m.over),...BASE.map(b=>ov.get(b.id)||b)]; };
 const byId=id=>all().find(r=>r.id===id);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -615,11 +616,12 @@ function viewDetail(){
   const src=imgOf(r);
   return `<div class="dtop"><button class="round" onclick="go(S.back)">${ic('back')}</button><button class="round ${isFav(r.id)?'on':''}" onclick="toggleFav('${r.id}')">${ic('heart')}</button></div>
   <div class="rhead"><div class="sq" style="${grad(r.cat)}">${src?`<img src="${src}" alt="">`:ill(r.cat)}<button class="cam" onclick="pickPhoto('${r.id}')" aria-label="Cambiar foto">${ic('camera','sm')}</button></div>
-    <div>${r.flags?`<div class="flagrow">${flags(r,16)}<span>${esc(r.origin||'')}</span></div>`:''}<span class="cat-tag">${esc(r.cat)}${r.adapted?' · Cocina del mundo':''}${r.cuchara?' · De cuchara':''}</span><h1>${esc(r.title)}</h1>
+    <div>${r.flags?`<div class="flagrow">${flags(r,16)}<span>${esc(r.origin||'')}</span></div>`:''}<span class="cat-tag">${esc(r.cat)}${r.adapted?' · Cocina del mundo':''}${r.cuchara?' · De cuchara':''}${r.over?' · Editada':''}</span><h1>${esc(r.title)}</h1>
       <div class="mt"><span>${r.time?r.time+' min':''}</span><span>${r.diff?esc(r.diff):r.steps.length+' pasos'}</span>
         <span class="serves"><button onclick="setServes(-1)">−</button><b>${S.serves}</b><button onclick="setServes(1)">+</button> rac.</span></div></div></div>
   <div class="sheet flat" style="padding-top:0">${recipeBody(r,S.serves,false,true)}
-    ${r.mine?`<div class="block" style="display:flex;gap:10px"><button class="btn sec" onclick="editRecipe('${r.id}')">${ic('edit','sm')}Editar</button><button class="btn danger" onclick="delRecipe('${r.id}')">${ic('trash','sm')}Eliminar</button></div>`:''}
+    <div class="block" style="display:flex;gap:10px"><button class="btn sec" onclick="editRecipe('${r.id}')">${ic('edit','sm')}Editar receta</button>${r.mine?`<button class="btn danger" onclick="delRecipe('${r.id}')">${ic('trash','sm')}Eliminar</button>`:r.over?`<button class="btn sec" onclick="restoreRecipe('${r.id}')">${ic('reset','sm')}Restaurar original</button>`:''}</div>
+    ${r.over?`<div class="note" style="margin-top:0">Has modificado esta receta${r.edited?' el '+r.edited.split('-').reverse().join('/'):''}. Pulsa «Restaurar original» para volver a la versión de origen.</div>`:''}
     ${(r.adapted||(r.src||[]).length)?`<div class="block"><div class="tip" style="background:var(--green-soft)"><b style="color:var(--green)">Receta adaptada a la Clickchef</b>Redactada para tu máquina a partir de versiones de este plato para robots de cocina. Velocidades, tiempos y temperaturas son una adaptación: revísalos la primera vez que la cocines.${(r.src||[]).length?`<div style="margin-top:8px;font-size:13px">Referencias: ${r.src.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--green);font-weight:700">${esc(new URL(u).hostname.replace('www.',''))}</a>`).join(' · ')}</div>`:''}</div></div>`:''}
     ${r.page?`<div class="note">Recetario oficial ClickChef, página ${r.page}. Los valores de velocidad, tiempo y temperatura se han extraído del texto de la receta: revisa el texto de cada paso, que es el original.</div>`:''}
     <div style="height:90px"></div></div>
@@ -997,7 +999,7 @@ function newDraft(){ return {editing:null,stage:0,photo:null,title:'',cat:'Entra
 let D=store.get('cc_draft2',null)||newDraft();
 function saveDraft(){ if(!store.set('cc_draft2',D)){ const p=D.photo; D.photo=null; store.set('cc_draft2',D); D.photo=p; } }
 function draftRecipe(){
-  const ing=D.ings.filter(i=>i.n.trim()).map(i=>({q:i.q===''||i.u===''?null:parseFloat(String(i.q).replace(',','.')),u:i.u==='ud'?'':i.u,n:i.n.trim()}));
+  const ing=D.ings.filter(i=>i.n.trim()).map(i=>i.h?{h:i.n.trim()}:({q:i.q===''||i.u===''?null:parseFloat(String(i.q).replace(',','.')),u:i.u==='ud'?'':i.u,n:i.n.trim()}));
   const steps=D.steps.filter(s=>s.t.trim()).map(s=>{ const o={t:s.t.trim()}, sec=(+s.m||0)*60+(+s.sec||0);
     if(s.s!=='') o.s=s.s==='P'?'P':+s.s; if(sec) o.time=sec; if(s.temp) o.temp=+s.temp; if(s.prog) o.prog=s.prog; if(s.acc) o.acc=s.acc; return o; });
   const accs=[...new Set(steps.map(s=>s.acc).filter(Boolean))];
@@ -1021,12 +1023,12 @@ function viewAdd(){
       </div></div>`;
   } else if(D.stage===1){
     body=`<div class="form"><div class="block" style="margin-top:6px"><h3>Ingredientes</h3>
-      ${D.ings.map((i,k)=>`<div class="ingrow">
+      ${D.ings.map((i,k)=>i.h?`<div class="ingrow sec"><input value="${esc(i.n)}" placeholder="Nombre de la sección" oninput="D.ings[${k}].n=this.value;saveDraft()"><button type="button" onclick="D.ings.splice(${k},1);saveDraft();render()">${ic('close','sm')}</button></div>`:`<div class="ingrow">
         <input inputmode="decimal" value="${esc(i.q)}" placeholder="200" oninput="D.ings[${k}].q=this.value;saveDraft()">
-        <select onchange="D.ings[${k}].u=this.value;saveDraft()">${opt(UNITS.map(u=>[u,u||'al gusto']),i.u)}</select>
+        <select onchange="D.ings[${k}].u=this.value;saveDraft()">${opt((UNITS.includes(i.u)?UNITS:[...UNITS,i.u]).map(u=>[u,u||'al gusto']),i.u)}</select>
         <input value="${esc(i.n)}" placeholder="harina de trigo" oninput="D.ings[${k}].n=this.value;saveDraft()">
         <button type="button" onclick="D.ings.splice(${k},1);if(!D.ings.length)D.ings.push({q:'',u:'g',n:''});saveDraft();render()">${ic('close','sm')}</button></div>`).join('')}
-      <button type="button" class="btn sec" style="margin-top:6px" onclick="D.ings.push({q:'',u:'g',n:''});saveDraft();render()">Añadir ingrediente</button>
+      <div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="btn sec" onclick="D.ings.push({q:'',u:'g',n:''});saveDraft();render()">Añadir ingrediente</button><button type="button" class="btn sec" style="flex:0 0 auto;width:auto;padding:0 14px" onclick="D.ings.push({h:true,q:'',u:'',n:''});saveDraft();render()">Añadir sección</button></div>
       <div class="note">Cantidad, unidad e ingrediente. Se usan para recalcular raciones y para la lista de la compra.</div></div></div>`;
   } else if(D.stage===2){
     const st=D.steps[D.si], n=D.steps.length;
@@ -1036,7 +1038,7 @@ function viewAdd(){
       <div class="panel">
         <div class="cell"><small>Velocidad</small><select onchange="D.steps[${D.si}].s=this.value;saveDraft()">${opt([['','—'],['0','0'],...Array.from({length:12},(_,i)=>[i+1,i+1]),['P','Pulse']],st.s)}</select></div>
         <div class="cell"><small>Tiempo</small><div class="tpair"><input inputmode="numeric" placeholder="0" value="${esc(st.m)}" oninput="D.steps[${D.si}].m=this.value;saveDraft()"><span style="opacity:.5">:</span><input inputmode="numeric" placeholder="00" value="${esc(st.sec)}" oninput="D.steps[${D.si}].sec=this.value;saveDraft()"></div></div>
-        <div class="cell"><small>Temp. °C</small><select onchange="D.steps[${D.si}].temp=this.value;saveDraft()">${opt([['','—'],...Array.from({length:19},(_,i)=>[30+i*5,30+i*5])],st.temp)}</select></div>
+        <div class="cell"><small>Temp. °C</small><select onchange="D.steps[${D.si}].temp=this.value;saveDraft()">${opt([['','—'],...[...new Set([...Array.from({length:19},(_,i)=>30+i*5),...(st.temp?[+st.temp]:[])])].sort((x,y)=>x-y).map(t=>[t,t])],st.temp)}</select></div>
         <div class="cell wide"><small>Programa</small><select onchange="D.steps[${D.si}].prog=this.value;saveDraft()">${opt([['','Ninguno'],...PROGS.map(p=>[p,p+' · '+PROGES[p]])],st.prog)}</select></div>
         <div class="cell wide"><small>Accesorio</small><select onchange="D.steps[${D.si}].acc=this.value;saveDraft()">${opt([['','Ninguno'],...Object.entries(ACC)],st.acc)}</select></div>
       </div>
@@ -1064,7 +1066,11 @@ function wizNext(){
   if(D.stage===2&&!D.steps.some(s=>s.t.trim())) return toast('Escribe al menos un paso');
   if(D.stage<3){ D.stage++; saveDraft(); render(); window.scrollTo(0,0); return; }
   const r=draftRecipe();
-  if(D.editing){ r.id=D.editing; r.mine=true; mine=mine.map(m=>m.id===D.editing?r:m); }
+  const base=D.editing&&BASE.find(b=>b.id===D.editing);
+  if(base){ const keep={}; ['page','img','adapted','src','flags','origin','cuchara','progs','servesUnit'].forEach(k=>{ if(base[k]!=null) keep[k]=base[k]; });
+    Object.assign(r,keep,{id:D.editing,over:true,edited:new Date().toISOString().slice(0,10)}); r.servesTxt=String(r.serves);
+    mine=mine.filter(m=>m.id!==D.editing); mine.push(r); }
+  else if(D.editing){ r.id=D.editing; r.mine=true; mine=mine.map(m=>m.id===D.editing?r:m); }
   else { r.id='m'+Date.now(); r.mine=true; mine.unshift(r); }
   if(D.photo) photos[r.id]=D.photo;
   const ok=store.set('cc_mine',mine); store.set('cc_photos',photos);
@@ -1075,10 +1081,16 @@ function delStep(){ D.steps.splice(D.si,1); D.si=Math.max(0,D.si-1); saveDraft()
 function editRecipe(id){
   const r=byId(id);
   D={editing:id,stage:0,photo:photos[id]||null,title:r.title,cat:r.cat,time:r.time,serves:r.serves,diff:r.diff||'Fácil',
-     ings:r.ing.filter(i=>!i.h).map(i=>({q:i.q==null?'':String(i.q),u:i.q==null?'':(i.u||'ud'),n:i.n})),
+     ings:r.ing.map(i=>i.h?{h:true,q:'',u:'',n:i.h}:({q:i.q==null?'':String(i.q),u:i.q==null?'':(i.u||'ud'),n:i.n})),
      steps:r.steps.map(s=>({t:s.t,s:s.s!=null?String(s.s):'',m:s.time?String(Math.floor(s.time/60)):'',sec:s.time&&s.time%60?String(s.time%60):'',temp:s.temp?String(s.temp):'',prog:s.prog||'',acc:s.acc||''})),
      si:0,tip:r.tip||'',kcalManual:''};
   saveDraft(); go('add');
+}
+function restoreRecipe(id){
+  const d=document.createElement('div'); d.className='drawer';
+  d.innerHTML=`<div class="box"><h3>¿Restaurar la receta original?</h3><p style="color:var(--muted)">Se perderán tus cambios en esta receta.</p><button class="btn" id="y">Restaurar</button><button class="btn sec" style="margin-top:10px" id="n">Cancelar</button></div>`;
+  document.body.appendChild(d); d.querySelector('#n').onclick=()=>d.remove();
+  d.querySelector('#y').onclick=()=>{ mine=mine.filter(m=>!(m.over&&m.id===id)); store.set('cc_mine',mine); d.remove(); openRecipe(id,'home'); toast('Receta original restaurada'); };
 }
 function delRecipe(id){
   const d=document.createElement('div'); d.className='drawer';
